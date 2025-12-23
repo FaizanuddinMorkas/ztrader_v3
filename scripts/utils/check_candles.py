@@ -2,6 +2,10 @@
 """Check what candle data is being sent to AI"""
 
 import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 sys.path.insert(0, '/Users/faizanuddinmorkas/Work/Personal/ztrader_new')
 
 from src.data.storage import OHLCVDB

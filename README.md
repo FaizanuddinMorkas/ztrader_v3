@@ -33,13 +33,27 @@ ztrader_new/
 │   └── config/            # Configuration management
 ├── scripts/
 │   ├── daily_workflow.py  # Main workflow orchestration
-│   ├── deploy_to_ec2.sh   # EC2 deployment script
-│   ├── database/          # Database setup & migrations
-│   └── connect-rds.sh     # RDS connection helper
+│   ├── signals/           # Signal generation scripts
+│   │   ├── daily_signals_scored.py  # AI-powered signals
+│   │   └── daily_signals.py         # Legacy signals
+│   ├── sync/              # Data synchronization
+│   │   ├── sync_data.py
+│   │   ├── sync_fundamentals.py
+│   │   └── sync_special_stocks.py
+│   ├── deployment/        # EC2 deployment
+│   │   ├── deploy_to_ec2.sh
+│   │   └── ec2_cron_setup.sh
+│   ├── connection/        # Database connections
+│   │   ├── connect-rds.sh
+│   │   └── connect-postgres.sh
+│   ├── migration/         # Database migrations
+│   ├── maintenance/       # System maintenance
+│   ├── utils/             # Utility scripts
+│   ├── database/          # Database setup
+│   └── testing/           # Testing scripts
+├── tests/                 # All test files
 ├── database/              # SQL migrations
 ├── docs/                  # Documentation
-├── sync_data.py           # Data synchronization script
-├── daily_signals_scored.py # Signal generation with AI
 └── requirements.txt       # Python dependencies
 ```
 
@@ -147,26 +161,26 @@ python scripts/daily_workflow.py --skip-fundamentals
 
 ```bash
 # Generate signals with AI sentiment analysis
-python daily_signals_scored.py --sentiment
+python scripts/signals/daily_signals_scored.py --sentiment
 
 # Test mode with specific symbols
-python daily_signals_scored.py --test --symbols RELIANCE.NS,TCS.NS
+python scripts/signals/daily_signals_scored.py --test --symbols RELIANCE.NS,TCS.NS
 
 # Silent mode (no notifications)
-python daily_signals_scored.py --no-notify
+python scripts/signals/daily_signals_scored.py --no-notify
 ```
 
 ### Data Synchronization
 
 ```bash
 # Sync all timeframes
-python sync_data.py --timeframe 1d --update
+python scripts/sync/sync_data.py --timeframe 1d --update
 
 # Full historical sync
-python sync_data.py --timeframe 1d --full
+python scripts/sync/sync_data.py --timeframe 1d --full
 
 # Force sync (bypass smart skip)
-python sync_data.py --timeframe 1d --update --force
+python scripts/sync/sync_data.py --timeframe 1d --update --force
 ```
 
 ## ☁️ EC2 Deployment
@@ -175,7 +189,7 @@ python sync_data.py --timeframe 1d --update --force
 
 ```bash
 # Deploy code to EC2
-./scripts/deploy_to_ec2.sh <EC2_IP> ~/.ssh/your-key.pem
+./scripts/deployment/deploy_to_ec2.sh <EC2_IP> ~/.ssh/your-key.pem
 
 # SSH into EC2
 ssh -i ~/.ssh/your-key.pem ubuntu@<EC2_IP>
@@ -192,7 +206,7 @@ python scripts/daily_workflow.py
 
 ```bash
 # On EC2, setup daily cron job
-./scripts/ec2_cron_setup.sh
+./scripts/deployment/ec2_cron_setup.sh
 ```
 
 ## 🤖 AI Features
@@ -249,16 +263,16 @@ Workflow status reports include:
 
 ```bash
 # Test database connection
-python test_db_connection.py
+python tests/test_db_connection.py
 
 # Test Telegram notifications
-python test_telegram.py
+python tests/test_telegram.py
 
 # Test sentiment analysis
-python test_sentiment.py
+python tests/test_sentiment.py
 
 # Test strategy
-python test_scored_strategy.py
+python tests/test_scored_strategy.py
 ```
 
 ### Code Quality

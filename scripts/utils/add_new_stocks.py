@@ -9,6 +9,10 @@ Comprehensive script to add new stocks to database
 """
 
 import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import yfinance as yf
 from src.data.downloader import YFinanceDownloader
 from src.data.fundamentals import FundamentalsDownloader

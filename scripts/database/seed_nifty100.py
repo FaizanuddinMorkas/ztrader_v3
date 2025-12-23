@@ -8,6 +8,9 @@ This script populates the instruments table with Nifty 100 stock symbols
 import sys
 from pathlib import Path
 
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 

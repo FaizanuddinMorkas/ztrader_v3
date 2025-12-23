@@ -9,6 +9,9 @@ filters for NSE listed companies, and adds them to the system.
 import sys
 import logging
 from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 import yfinance.screener as yfs
 from yfinance.screener import EquityQuery
 

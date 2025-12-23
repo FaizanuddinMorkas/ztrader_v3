@@ -4,6 +4,10 @@ Quick script to sync specific stocks to database
 """
 
 import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from src.data.downloader import YFinanceDownloader
 from src.data.fundamentals import FundamentalsDownloader
 from src.data.storage import DatabaseConnection, FundamentalsDB, InstrumentsDB
