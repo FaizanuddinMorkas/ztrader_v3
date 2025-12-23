@@ -45,6 +45,7 @@ rsync -avz --progress \
     --exclude='__pycache__' \
     --exclude='*.pyc' \
     --exclude='.DS_Store' \
+    --exclude='.env' \
     "$LOCAL_DIR/" \
     "$EC2_USER@$EC2_HOST:$REMOTE_DIR/"
 
