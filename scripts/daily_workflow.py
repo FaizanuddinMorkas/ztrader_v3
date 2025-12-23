@@ -203,7 +203,7 @@ def generate_signals(no_notify=False):
     logger.info("Running signal generation...")
     
     # Build command with optional --no-notify flag and sentiment analysis
-    cmd = ['python', 'daily_signals_scored.py', '--sentiment']
+    cmd = ['python', 'scripts/signals/daily_signals_scored.py', '--sentiment']
     if no_notify:
         cmd.append('--no-notify')
     
