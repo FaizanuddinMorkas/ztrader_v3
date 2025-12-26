@@ -186,7 +186,7 @@ def sync_market_data():
     
     # Run sync_data.py for 1d timeframe with live output (no timeout)
     sync_process = subprocess.Popen(
-        ['python', 'scripts/sync/sync_data.py', '--update', '--timeframe', '1d', '--workers', '1'],
+        [sys.executable, 'scripts/sync/sync_data.py', '--update', '--timeframe', '1d', '--workers', '1'],
     )
     sync_process.wait() # Wait for the process to complete
     
@@ -207,7 +207,7 @@ def generate_signals(no_notify=False, test_symbol=None):
         logger.info("Running signal generation...")
     
     # Build command with optional --no-notify flag and sentiment analysis
-    cmd = ['python', 'scripts/signals/daily_signals_scored.py', '--sentiment']
+    cmd = [sys.executable, 'scripts/signals/daily_signals_scored.py', '--sentiment']
     if no_notify:
         cmd.append('--no-notify')
     if test_symbol:

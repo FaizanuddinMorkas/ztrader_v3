@@ -475,7 +475,7 @@ class InteractiveTradingBot:
             project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             
             process = subprocess.Popen(
-                ['python', 'scripts/daily_workflow.py'],
+                [sys.executable, 'scripts/daily_workflow.py'],
                 cwd=project_root,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
