@@ -1,0 +1,18 @@
+[Unit]
+Description=Interactive Trading Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ztrader
+Environment="PATH=/home/ubuntu/ztrader/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PYTHONPATH=/home/ubuntu/ztrader"
+ExecStart=/home/ubuntu/ztrader/venv/bin/python /home/ubuntu/ztrader/scripts/telegram_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/ubuntu/ztrader/logs/bot.log
+StandardError=append:/home/ubuntu/ztrader/logs/bot-error.log
+
+[Install]
+WantedBy=multi-user.target

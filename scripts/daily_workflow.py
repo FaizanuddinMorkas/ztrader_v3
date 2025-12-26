@@ -185,27 +185,33 @@ def sync_market_data():
     logger.info("Running incremental sync for 1d timeframe...")
     
     # Run sync_data.py for 1d timeframe with live output (no timeout)
-    result = subprocess.run(
-        ['python', 'sync_data.py', '--update', '--timeframe', '1d', '--workers', '1']
+    sync_process = subprocess.Popen(
+        ['python', 'scripts/sync/sync_data.py', '--update', '--timeframe', '1d', '--workers', '1'],
     )
+    sync_process.wait() # Wait for the process to complete
     
-    if result.returncode != 0:
+    if sync_process.returncode != 0:
         logger.error("Sync failed")
         return False
     
     logger.info("✅ Market data sync completed")
     return True
 
-def generate_signals(no_notify=False):
+def generate_signals(no_notify=False, test_symbol=None):
     """Generate trading signals"""
     print_header("STEP 4: Generating Trading Signals")
     
-    logger.info("Running signal generation...")
+    if test_symbol:
+        logger.info(f"Running signal generation for test symbol: {test_symbol}")
+    else:
+        logger.info("Running signal generation...")
     
     # Build command with optional --no-notify flag and sentiment analysis
     cmd = ['python', 'scripts/signals/daily_signals_scored.py', '--sentiment']
     if no_notify:
         cmd.append('--no-notify')
+    if test_symbol:
+        cmd.extend(['--test-symbol', test_symbol])
     
     # Run daily_signals_scored.py with live output and sentiment analysis (no timeout)
     result = subprocess.run(cmd)
@@ -268,6 +274,7 @@ def main():
     parser.add_argument('--skip-sync', action='store_true', help='Skip market data sync')
     parser.add_argument('--skip-fundamentals', action='store_true', help='Skip fundamentals check/sync')
     parser.add_argument('--no-notify', action='store_true', help='Disable all Telegram notifications')
+    parser.add_argument('--test-symbol', type=str, help='Test with specific symbol (e.g., RELIANCE.NS)')
     args = parser.parse_args()
     
     start_time = datetime.now()
@@ -328,7 +335,7 @@ def main():
     
     # Step 4: Generate signals
     try:
-        signal_success, signal_output = generate_signals(no_notify=args.no_notify)
+        signal_success, signal_output = generate_signals(no_notify=args.no_notify, test_symbol=args.test_symbol)
         if not signal_success:
             logger.error("❌ Signal generation failed")
             status_dict['Signal Generation'] = {'success': False, 'message': 'Failed', 'error': signal_output}

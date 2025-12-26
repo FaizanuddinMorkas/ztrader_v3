@@ -60,14 +60,59 @@ The sync will show real-time progress:
 ...
 ```
 
-## Setup Automated Daily Updates
+## ⏰ Automated Job Management
 
+### 1. Setup Automation
+Run the setup script to install the full schedule (Reports + Workflow):
 ```bash
-# Edit crontab
-crontab -e
+# On EC2
+cd ~/ztrader
+./scripts/deployment/ec2_cron_setup.sh
+```
 
-# Add this line (runs at 4 PM IST daily)
-0 16 * * * cd ~/ztrader && source venv/bin/activate && python sync_data.py --update >> logs/sync.log 2>&1
+### 2. List Active Jobs
+See what is currently scheduled to run:
+```bash
+crontab -l
+```
+
+### 3. Check Running Processes
+See if any job is currently executing:
+```bash
+# Filter for python or monitoring wrapper
+ps aux | grep -E "python|monitor_job"
+```
+
+### 4. Stop/Pause a Job
+To disable a specific job:
+1. Edit the schedule:
+   ```bash
+   crontab -e
+   ```
+2. Add a `#` at the start of the line to pause it.
+   ```bash
+   # 0 4 * * 1-5 bash ... (Paused)
+   ```
+3. Save and exit (`:wq` in vi/vim).
+
+### 5. Kill a Stuck Job
+If a job hangs, find its PID and kill it:
+```bash
+# 1. Find PID
+ps aux | grep daily_workflow.py
+
+# 2. Kill it
+kill -9 <PID>
+```
+
+### 6. Logs & Errors
+All jobs are monitored. Logs are in `~/ztrader/logs/`.
+- **Success**: Output written to `report_*.log` or `daily_workflow.log`.
+- **Failure**: Error alert sent to Telegram immediately.
+
+To tail a log file in real-time:
+```bash
+tail -f ~/ztrader/logs/daily_workflow.log
 ```
 
 ## Troubleshooting

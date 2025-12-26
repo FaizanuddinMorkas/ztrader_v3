@@ -71,7 +71,7 @@ def main():
     if args.sentiment and signals:
         print()
         print("=" * 80)
-        print("ANALYZING NEWS SENTIMENT WITH GEMINI AI")
+        print("ANALYZING NEWS SENTIMENT WITH AI")
         print("=" * 80)
         
         try:

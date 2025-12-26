@@ -211,6 +211,7 @@ def main():
     parser.add_argument('--test', action='store_true', help='Test mode (no notifications)')
     parser.add_argument('--no-notify', action='store_true', help='Disable Telegram notifications')
     parser.add_argument('--symbols', nargs='+', help='Specific symbols to analyze')
+    parser.add_argument('--test-symbol', type=str, help='Test with single symbol (e.g., RELIANCE.NS)')
     parser.add_argument('--no-filter', action='store_true', help='Disable fundamental filtering')
     parser.add_argument('--min-confidence', type=float, default=65.0, help='Minimum confidence (default: 65)')
     parser.add_argument('--sentiment', action='store_true', help='Enable Gemini sentiment analysis')
@@ -218,6 +219,10 @@ def main():
                        help='Timeframe for analysis: 1d (daily) or 75m (intraday)')
     
     args = parser.parse_args()
+    
+    # Handle test-symbol as alias for symbols
+    if args.test_symbol:
+        args.symbols = [args.test_symbol]
     
     print("=" * 80)
     print("DAILY TRADING SIGNALS (SCORED FUNDAMENTALS)")
@@ -242,11 +247,11 @@ def main():
     if args.sentiment and signals:
         print()
         print("=" * 80)
-        print("ANALYZING NEWS SENTIMENT WITH GEMINI AI")
+        print("ANALYZING NEWS SENTIMENT WITH AI")
         print("=" * 80)
         
         try:
-            analyzer = NewsSentimentAnalyzer()
+            analyzer = NewsSentimentAnalyzer(compact_mode=True)  # Use compact prompts for batch processing
             signals = analyzer.batch_enhance_signals(signals)
             print(f"\n✅ Sentiment analysis complete for {len(signals)} signals")
         except ImportError:

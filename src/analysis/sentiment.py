@@ -29,15 +29,19 @@ class NewsSentimentAnalyzer:
     Fetches recent news and uses Gemini to determine bullish/bearish sentiment
     """
     
-    def __init__(self, provider: str = 'auto'):
+    def __init__(self, provider: str = 'auto', compact_mode: bool = False):
         """
         Initialize sentiment analyzer
         
         Args:
             provider: 'gemini', 'openrouter', or 'auto' (tries OpenRouter first, falls back to Gemini)
+            compact_mode: If True, use shorter AI prompts for batch processing (daily workflow)
+                         If False, use detailed prompts for interactive analysis (/analyze command)
         """
+        self.compact_mode = compact_mode
         self.provider = None
-        self.model = None
+        self.model_name = None # Changed from self.model to self.model_name for consistency
+        self.client = None # Initialize client here
         
         if provider == 'auto':
             # Try OpenRouter first (higher limits), fall back to Gemini
@@ -68,9 +72,7 @@ class NewsSentimentAnalyzer:
                 base_url="https://openrouter.ai/api/v1",
                 api_key=api_key,
             )
-            # Use Gemma-3-27B for best free financial analysis (free, unlimited, fast)
-            # This is the largest free model - better than Gemma-2-9B
-            self.model_name = "google/gemma-3-27b-it:free"
+            self.model_name = 'nex-agi/deepseek-v3.1-nex-n1:free'  # Enhanced DeepSeek V3.1
             self.provider = 'openrouter'
             logger.info(f"OpenRouter initialized with model: {self.model_name}")
             return True
@@ -281,7 +283,8 @@ Focus on:
                 # Use OpenRouter API
                 response = self.client.chat.completions.create(
                     model=self.model_name,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0  # Deterministic responses
                 )
                 response_text = response.choices[0].message.content
             else:
@@ -447,13 +450,12 @@ Analyze the {num_candles} candles above to identify:
 - Set stop-loss below recent support (specify the date of that swing low)
 - Set targets at resistance levels (specify dates of swing highs)
 - Consider risk:reward ratio (minimum 1:1.5)
-- **DETAILED REASONING is REQUIRED** - provide comprehensive technical analysis
-- **KEEP REASONING CONCISE: Maximum 1200-1500 characters**
 - **USE EXACT DATES (YYYY-MM-DD format) when referencing specific candles or events**
 
 Provide analysis in this EXACT format:
 STRENGTH: [weak/moderate/strong]
 PREDICTION: [bullish/bearish/neutral]
+CONFIDENCE: [0-100]
 TIMEFRAME: [1-3 days/1 week/2 weeks]
 KEY_FACTORS: [2-3 key technical factors]
 RECOMMENDATION: [buy/hold/avoid]
@@ -461,14 +463,60 @@ AI_ENTRY: [price OR 'N/A']
 AI_STOP: [price OR 'N/A']
 AI_TARGET1: [price OR 'N/A']
 AI_TARGET2: [price OR 'None' OR 'N/A']
-REASONING: [Detailed but concise (1200-1500 chars): 1) Trend analysis citing specific dates, 2) Support/resistance levels with dates, 3) Volume patterns with dates, 4) Why these entry/stop/target levels, 5) Risk factors, 6) Overall setup. ALWAYS use YYYY-MM-DD format for dates.]
+"""
+        
+        # Character limit and detail level based on mode
+        if self.compact_mode:
+            # COMPACT: For daily workflow batch processing (all 8 points, concise)
+            prompt += """REASONING: [1200-1500 CHARACTERS. Format each point on NEW LINE:
+
+1) TREND: Key dates and price levels
+
+2) SUPPORT/RESISTANCE: 2-3 levels with dates
+
+3) VOLUME: Patterns and confirmation
+
+4) PATTERNS: Chart/candlestick signals
+
+5) ENTRY/STOP/TARGET: Why these levels
+
+6) RISKS: Specific risks with probabilities
+
+7) NEWS IMPACT: How news affects setup
+
+8) OVERALL: Final recommendation
+
+Use YYYY-MM-DD dates. MAX 1500 CHARS. Keep each point brief but complete.]
+"""
+        else:
+            # DETAILED: For interactive /analyze commands
+            prompt += """REASONING: [2200-2500 CHARACTERS. Format each point on NEW LINE:
+
+1) TREND: Key dates and price levels
+
+2) SUPPORT/RESISTANCE: 2-3 levels with dates
+
+3) VOLUME: Patterns and confirmation
+
+4) PATTERNS: Chart/candlestick signals
+
+5) ENTRY/STOP/TARGET: Why these levels
+
+6) RISKS: Specific risks with probabilities
+
+7) NEWS IMPACT: How news affects setup
+
+8) OVERALL: Final recommendation
+
+Use YYYY-MM-DD dates. MAX 2500 CHARS. Put blank line between each numbered point.]
 """
         
         try:
             if self.provider == 'openrouter':
                 response = self.client.chat.completions.create(
                     model=self.model_name,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0  # Deterministic responses
                 )
                 response_text = response.choices[0].message.content
             else:
@@ -494,12 +542,12 @@ REASONING: [Detailed but concise (1200-1500 chars): 1) Trend analysis citing spe
         except Exception as e:
             logger.error(f"Error in technical analysis for {symbol}: {e}")
             return {
-                'strength': 'moderate',
-                'prediction': 'neutral',
-                'timeframe': '1 week',
-                'confidence': 50,
+                'strength': 'unknown',
+                'prediction': 'unknown',
+                'timeframe': 'N/A',
+                'confidence': 0,
                 'key_factors': [],
-                'recommendation': 'hold',
+                'recommendation': 'N/A',
                 'reasoning': f'Error: {str(e)}',
                 'ai_entry': None,
                 'ai_stop': None,
@@ -510,17 +558,21 @@ REASONING: [Detailed but concise (1200-1500 chars): 1) Trend analysis citing spe
     def _parse_technical_analysis(self, response_text: str) -> Dict:
         """Parse AI technical analysis response including trade levels"""
         result = {
-            'strength': 'moderate',
-            'prediction': 'neutral',
-            'timeframe': '1 week',
-            'confidence': 50,
+            'strength': 'unknown',
+            'prediction': 'unknown',
+            'timeframe': 'N/A',
+            'confidence': 0,
             'key_factors': [],
-            'recommendation': 'hold',
+            'recommendation': 'N/A',
             'reasoning': '',
             'ai_entry': None,
             'ai_stop': None,
             'ai_target1': None,
-            'ai_target2': None
+            'ai_target2': None,
+            'entry': None,
+            'stop_loss': None,
+            'target1': None,
+            'target2': None
         }
         
         # Split response into lines for parsing
