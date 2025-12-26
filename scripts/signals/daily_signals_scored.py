@@ -232,187 +232,143 @@ def main():
     print(f"Mode: {'TEST' if args.test else 'LIVE'}")
     print()
     
-    # Generate signals
+    # Initialize components
     logger.info("Starting signal generation...")
-    # Initialize signal generator with timeframe
     generator = SignalGeneratorScored(timeframe=args.timeframe, lookback=365)
     
-    signals = generator.generate_signals(
-        symbols=args.symbols,
-        use_fundamental_filter=False,  # Scored strategy doesn't filter
-        min_confidence=args.min_confidence
-    )
+    # Get symbols to analyze
+    if args.symbols is None:
+        from src.data.storage import InstrumentsDB
+        instruments_db = InstrumentsDB()
+        symbols = instruments_db.get_nifty_100()
+    else:
+        symbols = args.symbols
     
-    # Sentiment analysis (optional)
-    if args.sentiment and signals:
-        print()
-        print("=" * 80)
-        print("ANALYZING NEWS SENTIMENT WITH AI")
-        print("=" * 80)
-        
+    print(f"Analyzing {len(symbols)} symbols...")
+    print()
+    
+    # Initialize AI analyzer if sentiment is enabled
+    analyzer = None
+    if args.sentiment:
         try:
-            analyzer = NewsSentimentAnalyzer(compact_mode=True)  # Use compact prompts for batch processing
-            signals = analyzer.batch_enhance_signals(signals)
-            print(f"\n✅ Sentiment analysis complete for {len(signals)} signals")
+            analyzer = NewsSentimentAnalyzer(compact_mode=True)
+            print("✅ AI sentiment analysis enabled")
         except ImportError:
-            logger.warning("Gemini not configured. Install google-generativeai and set GEMINI_API_KEY.")
-            print("\n⚠️  Gemini not configured")
-            print("To enable sentiment analysis:")
-            print("1. Install: pip install google-generativeai")
-            print("2. Get API key: https://makersuite.google.com/app/apikey")
-            print("3. Set GEMINI_API_KEY in .env")
-        except Exception as e:
-            logger.error(f"Error in sentiment analysis: {e}")
-            print(f"\n❌ Sentiment analysis error: {e}")
+            logger.warning("AI not available")
+            print("⚠️  AI sentiment analysis not available")
+            analyzer = None
     
-    # Display signals
+    # Initialize Telegram notifier if notifications enabled
+    notifier = None
+    if not args.test and not args.no_notify:
+        try:
+            notifier = TelegramNotifier(broadcast_to_users=True)
+            print("✅ Telegram notifications enabled (broadcast mode)")
+        except Exception as e:
+            logger.error(f"Failed to initialize Telegram: {e}")
+            print(f"⚠️  Telegram not available: {e}")
+            notifier = None
+    
     print()
     print("=" * 80)
-    print(f"SIGNALS GENERATED: {len(signals)}")
+    print("STREAMING SIGNAL GENERATION")
     print("=" * 80)
+    print()
     
-    if signals:
-        for i, signal in enumerate(signals, 1):
-            print(f"\n{'='*60}")
-            print(f"[{i}] {signal['symbol']}")
-            print(f"{'='*60}")
-            
-            # STRATEGY SIGNAL (Your Multi-Indicator System)
-            print(f"\n📊 STRATEGY SIGNAL (Multi-Indicator):")
-            print(f"    Signal Type: {signal['signal_type']}")
-            
-            # Show sentiment adjustment if available
-            if 'sentiment' in signal:
-                sentiment_emoji = "🟢" if signal['sentiment']['sentiment'] == 'bullish' else "🔴" if signal['sentiment']['sentiment'] == 'bearish' else "⚪"
-                print(f"    {sentiment_emoji} News Sentiment: {signal['sentiment']['sentiment'].upper()} ({signal['sentiment']['confidence']}%)")
-                print(f"    Strategy Confidence: {signal['original_confidence']:.1f}%")
-                print(f"    Final Confidence: {signal['confidence']:.1f}% ({signal['sentiment_adjusted']:+d} from news)")
-            else:
-                print(f"    Confidence: {signal['confidence']:.1f}%")
-            
-            print(f"    Entry: ₹{signal['entry_price']}")
-            print(f"    Stop Loss: ₹{signal['stop_loss']} (Risk: ₹{signal['risk']})")
-            print(f"    Target 1: ₹{signal['target1']} (Reward: ₹{signal['reward']})")
-            print(f"    Risk:Reward: 1:{signal['risk_reward_ratio']:.1f}")
-            
-            # AI TECHNICAL ANALYSIS (DeepSeek Analysis)
-            if 'technical_analysis' in signal:
-                tech = signal['technical_analysis']
-                pred_emoji = "📈" if tech['prediction'] == 'bullish' else "📉" if tech['prediction'] == 'bearish' else "➡️"
-                rec_emoji = "✅" if tech['recommendation'] == 'buy' else "⏸️" if tech['recommendation'] == 'hold' else "❌"
-                
-                print(f"\n🤖 AI TECHNICAL ANALYSIS (Gemma-3-27B):")
-                print(f"    {pred_emoji} AI Prediction: {tech['prediction'].upper()} ({tech['confidence']}%)")
-                print(f"    {rec_emoji} AI Recommendation: {tech['recommendation'].upper()}")
-                print(f"    ⏰ Timeframe: {tech['timeframe']}")
-                print(f"    💪 Signal Strength: {tech['strength'].upper()}")
-                if tech.get('reasoning'):
-                    print(f"    💡 AI Reasoning: {tech['reasoning']}")
-                
-                # Show AI-generated trade levels if available
-                if tech.get('ai_entry') and tech.get('ai_stop') and tech.get('ai_target1'):
-                    print(f"\n🎯 AI SUGGESTED LEVELS:")
-                    print(f"    Entry: ₹{tech['ai_entry']:.2f}")
-                    print(f"    Stop Loss: ₹{tech['ai_stop']:.2f} (Risk: ₹{tech['ai_entry'] - tech['ai_stop']:.2f})")
-                    print(f"    Target 1: ₹{tech['ai_target1']:.2f} (Reward: ₹{tech['ai_target1'] - tech['ai_entry']:.2f})")
-                    if tech.get('ai_target2'):
-                        print(f"    Target 2: ₹{tech['ai_target2']:.2f} (Reward: ₹{tech['ai_target2'] - tech['ai_entry']:.2f})")
-                    
-                    ai_risk = tech['ai_entry'] - tech['ai_stop']
-                    ai_reward = tech['ai_target1'] - tech['ai_entry']
-                    ai_rr = ai_reward / ai_risk if ai_risk > 0 else 0
-                    print(f"    Risk:Reward: 1:{ai_rr:.1f}")
-                    
-                    # Calculate hybrid setup (best of both)
-                    print(f"\n💎 HYBRID SETUP (Best of Both):")
-                    
-                    # Use better entry (closer to support)
-                    hybrid_entry = min(signal['entry_price'], tech['ai_entry'])
-                    # Use tighter stop (less risk)
-                    hybrid_stop = max(signal['stop_loss'], tech['ai_stop'])
-                    # Use higher target (more reward)
-                    hybrid_target = max(signal['target1'], tech['ai_target1'])
-                    
-                    hybrid_risk = hybrid_entry - hybrid_stop
-                    hybrid_reward = hybrid_target - hybrid_entry
-                    hybrid_rr = hybrid_reward / hybrid_risk if hybrid_risk > 0 else 0
-                    
-                    print(f"    Entry: ₹{hybrid_entry:.2f} ({'AI' if hybrid_entry == tech['ai_entry'] else 'Strategy'})")
-                    print(f"    Stop Loss: ₹{hybrid_stop:.2f} ({'AI' if hybrid_stop == tech['ai_stop'] else 'Strategy'})")
-                    print(f"    Target: ₹{hybrid_target:.2f} ({'AI' if hybrid_target == tech['ai_target1'] else 'Strategy'})")
-                    print(f"    Risk: ₹{hybrid_risk:.2f} | Reward: ₹{hybrid_reward:.2f}")
-                    print(f"    Risk:Reward: 1:{hybrid_rr:.1f} ⭐")
-            
-            # FINAL DECISION HELPER
-            if 'technical_analysis' in signal:
-                strategy_bullish = signal['signal_type'] == 'BUY'
-                ai_bullish = tech['prediction'] == 'bullish'
-                ai_recommends_buy = tech['recommendation'] == 'buy'
-                
-                if strategy_bullish and ai_bullish and ai_recommends_buy:
-                    print(f"\n✅ STRONG CONSENSUS: Both Strategy & AI agree - BUY")
-                elif strategy_bullish and ai_bullish:
-                    print(f"\n⚠️  MODERATE: Strategy & AI bullish, but AI suggests {tech['recommendation'].upper()}")
-                elif strategy_bullish and not ai_bullish:
-                    print(f"\n⚠️  CONFLICT: Strategy says BUY, AI says {tech['prediction'].upper()}")
-                    print(f"    → Proceed with caution or skip this trade")
-    else:
-        print("\nNo signals generated today.")
+    # Track statistics
+    total_signals = 0
+    sent_signals = 0
     
-    # Send notifications
-    if not args.test and not args.no_notify and signals:
-        print()
-        print("=" * 80)
-        print("SENDING NOTIFICATIONS")
-        print("=" * 80)
-        
+    # STREAMING APPROACH: Process one symbol at a time
+    for i, symbol in enumerate(symbols, 1):
         try:
-            # Use broadcast mode to send to all active users via ANALYSIS bot
-            notifier = TelegramNotifier(broadcast_to_users=True)
+            print(f"[{i}/{len(symbols)}] Analyzing {symbol}...")
             
-            # Format messages for all signals
-            messages = []
-            priorities = []
+            # Step 1: Generate signal for this symbol
+            signals = generator.generate_signals(
+                symbols=[symbol],
+                use_fundamental_filter=False,
+                min_confidence=args.min_confidence
+            )
             
-            for signal in signals:
-                if signal['confidence'] >= args.min_confidence:
-                    messages.append(format_telegram_message(signal))
-                    priorities.append(signal['confidence'] > 90.0)
+            if not signals:
+                print(f"  ↳ No signal (confidence < {args.min_confidence}%)")
+                continue
             
-            # Format summary
-            summary = format_summary_message(signals)
+            signal = signals[0]
+            total_signals += 1
+            print(f"  ✅ Signal generated (confidence: {signal['confidence']:.1f}%)")
             
-            # Create async function to send all notifications
-            async def send_all_notifications():
-                # Send individual signals
-                stats = await notifier.send_messages(messages, priorities)
-                
-                # Send summary
-                await notifier.send_summary(summary)
-                
-                return stats
+            # Step 2: Enhance with AI if enabled
+            if analyzer:
+                print(f"  🤖 Running AI analysis...")
+                try:
+                    enhanced = analyzer.batch_enhance_signals([signal])
+                    if enhanced:
+                        signal = enhanced[0]
+                        print(f"  ✅ AI analysis complete")
+                except Exception as e:
+                    logger.error(f"AI analysis failed for {symbol}: {e}")
+                    print(f"  ⚠️  AI analysis failed, using base signal")
             
-            # Run both in same event loop
-            stats = asyncio.run(send_all_notifications())
+            # Step 3: Send to Telegram immediately
+            if notifier:
+                print(f"  📤 Sending to Telegram...")
+                try:
+                    message = format_telegram_message(signal)
+                    priority = signal['confidence'] > 90.0
+                    
+                    async def send_signal():
+                        return await notifier.send_message(message, priority=priority)
+                    
+                    success = asyncio.run(send_signal())
+                    if success:
+                        sent_signals += 1
+                        print(f"  ✅ Sent to users")
+                    else:
+                        print(f"  ❌ Failed to send")
+                except Exception as e:
+                    logger.error(f"Failed to send {symbol}: {e}")
+                    print(f"  ❌ Send failed: {e}")
             
-            print(f"\nTelegram notifications:")
-            print(f"  Sent: {stats['sent']}")
-            print(f"  Priority: {stats['priority_sent']}")
-            print(f"  Failed: {stats['failed']}")
+            # Display signal details
+            print(f"  📊 Entry: ₹{signal['entry_price']:.2f}, Stop: ₹{signal['stop_loss']:.2f}, Target: ₹{signal['target1']:.2f}")
+            print()
             
-        except ImportError:
-            logger.warning("Telegram not configured. Install python-telegram-bot and set environment variables.")
-            print("\n⚠️  Telegram not configured")
-            print("To enable notifications:")
-            print("1. Install: pip install python-telegram-bot")
-            print("2. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env")
-        
         except Exception as e:
-            logger.error(f"Error sending notifications: {e}")
-            print(f"\n❌ Error sending notifications: {e}")
-    elif args.no_notify and signals:
-        logger.info("Notifications disabled via --no-notify flag")
-        print("\n⏭️  Notifications disabled (--no-notify)")
+            logger.error(f"Error processing {symbol}: {e}")
+            print(f"  ❌ Error: {e}")
+            print()
+    
+    # Send summary
+    print("=" * 80)
+    print("SUMMARY")
+    print("=" * 80)
+    print(f"Symbols analyzed: {len(symbols)}")
+    print(f"Signals generated: {total_signals}")
+    print(f"Signals sent: {sent_signals}")
+    
+    if notifier and total_signals > 0:
+        print()
+        print("Sending summary message...")
+        try:
+            summary = format_summary_message([])  # We don't have all signals in memory anymore
+            summary = f"""📊 *Daily Signal Summary*
+Date: {datetime.now().strftime('%Y-%m-%d')}
+
+Total Signals: *{total_signals}*
+Successfully Sent: {sent_signals}
+
+Signals were sent individually as they were generated."""
+            
+            async def send_summary_msg():
+                return await notifier.send_summary(summary)
+            
+            asyncio.run(send_summary_msg())
+            print("✅ Summary sent")
+        except Exception as e:
+            logger.error(f"Failed to send summary: {e}")
+            print(f"❌ Summary failed: {e}")
     
     print()
     print("=" * 80)
