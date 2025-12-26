@@ -367,7 +367,8 @@ def main():
         print("=" * 80)
         
         try:
-            notifier = TelegramNotifier()
+            # Use broadcast mode to send to all active users via ANALYSIS bot
+            notifier = TelegramNotifier(broadcast_to_users=True)
             
             # Format messages for all signals
             messages = []

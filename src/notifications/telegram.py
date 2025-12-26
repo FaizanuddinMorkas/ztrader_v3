@@ -31,22 +31,48 @@ class TelegramNotifier:
     - TELEGRAM_CHAT_ID environment variable
     """
     
-    def __init__(self):
-        """Initialize Telegram bot"""
+    def __init__(self, broadcast_to_users: bool = False):
+        """
+        Initialize Telegram bot
+        
+        Args:
+            broadcast_to_users: If True, send to all active users from DB using ANALYSIS bot.
+                               If False, send to single TELEGRAM_CHAT_ID using TELEGRAM bot.
+        """
         if not TELEGRAM_AVAILABLE:
             raise ImportError("python-telegram-bot not installed")
         
-        self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-        self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
+        self.broadcast_to_users = broadcast_to_users
         
-        if not self.bot_token:
-            raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set")
-        
-        if not self.chat_id:
-            raise ValueError("TELEGRAM_CHAT_ID environment variable not set")
+        if broadcast_to_users:
+            # Use ANALYSIS bot and fetch users from database
+            self.bot_token = os.getenv('ANALYSIS_TELEGRAM_BOT_TOKEN')
+            if not self.bot_token:
+                raise ValueError("ANALYSIS_TELEGRAM_BOT_TOKEN environment variable not set")
+            
+            # Import UserTracker to get active users
+            try:
+                from src.chat.user_tracker import UserTracker
+                self.user_tracker = UserTracker()
+                self.chat_id = None  # Will use multiple user IDs
+                logger.info("Telegram bot initialized in BROADCAST mode (all active users)")
+            except ImportError:
+                raise ImportError("UserTracker not available for broadcast mode")
+        else:
+            # Use regular bot and single chat ID
+            self.bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+            self.chat_id = os.getenv('TELEGRAM_CHAT_ID')
+            
+            if not self.bot_token:
+                raise ValueError("TELEGRAM_BOT_TOKEN environment variable not set")
+            
+            if not self.chat_id:
+                raise ValueError("TELEGRAM_CHAT_ID environment variable not set")
+            
+            self.user_tracker = None
+            logger.info("Telegram bot initialized in SINGLE CHAT mode")
         
         self.bot = Bot(token=self.bot_token)
-        logger.info("Telegram bot initialized")
     
     async def send_message(self, message: str, priority: bool = False) -> bool:
         """
@@ -57,21 +83,46 @@ class TelegramNotifier:
             priority: If True, add priority marker
             
         Returns:
-            True if sent successfully
+            True if sent successfully (or if all broadcasts succeeded)
         """
         try:
             # Add priority marker
             if priority:
                 message = "⚡ *HIGH CONFIDENCE SIGNAL* ⚡\n\n" + message
             
-            await self.bot.send_message(
-                chat_id=self.chat_id,
-                text=message,
-                parse_mode='Markdown'
-            )
-            
-            logger.info(f"✅ Sent Telegram message")
-            return True
+            if self.broadcast_to_users:
+                # Broadcast to all active users
+                users = self.user_tracker.get_all_users()
+                active_users = [u for u in users if u['is_active']]
+                
+                if not active_users:
+                    logger.warning("No active users to broadcast to")
+                    return False
+                
+                success_count = 0
+                for user in active_users:
+                    try:
+                        await self.bot.send_message(
+                            chat_id=user['telegram_user_id'],
+                            text=message,
+                            parse_mode='Markdown'
+                        )
+                        success_count += 1
+                    except TelegramError as e:
+                        logger.error(f"Failed to send to user {user['telegram_user_id']}: {e}")
+                
+                logger.info(f"✅ Broadcast to {success_count}/{len(active_users)} users")
+                return success_count > 0
+            else:
+                # Send to single chat
+                await self.bot.send_message(
+                    chat_id=self.chat_id,
+                    text=message,
+                    parse_mode='Markdown'
+                )
+                
+                logger.info(f"✅ Sent Telegram message")
+                return True
             
         except TelegramError as e:
             logger.error(f"❌ Telegram error: {e}")
